@@ -95,13 +95,15 @@ let bound =
     | Astroid -> { Width = 1.0; Height = 1.0 }
     | Bullet -> { Width = 1.0; Height = 1.0 }
 
-let inline createObject otype x y =
+let inline createObjectWithDir otype x y vx vy =
     { Position = { X = float x; Y = float y }
       Boundary = bound otype
-      Direction = { Vx = 0.0; Vy = 0.0 }
+      Direction = { Vx = float vx; Vy = float vy }
       Acceleration = { Vx = 0.0; Vy = 0.0 }
       Type = otype
     }
+
+let inline createObject otype x y = createObjectWithDir otype x y 0 0
 
 open Freckle
 open OpenTK.Input
@@ -118,15 +120,17 @@ let inputUpdate gs keyActivation  =
 let stateSampler inputMb stateMb gs =
     sample {
         let! input = Mailbox.readSync inputMb
+        let! gs = Feed.foldPast inputUpdate gs input
+
         let! pulses = Feed.pulse 20
-        let! gs' = Feed.foldPast inputUpdate gs input
-        let! gs'' = Feed.foldPast (fun s _ ->  update s) gs' pulses
+        let! gs = Feed.foldPast (fun s _ ->  update s) gs pulses
+
         do! pulses
             |> Feed.debouncing
-            |> Feed.map (fun _ -> fun () -> Mailbox.postSync gs'' stateMb)
+            |> Feed.map (fun _ -> fun () -> Mailbox.postSync gs stateMb)
             |> Feed.planSynced_
 
-        return gs''
+        return gs
 
     }
 

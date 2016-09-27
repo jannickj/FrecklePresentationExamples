@@ -1,4 +1,8 @@
-﻿open System
+﻿//Exercise:
+// Add a clock that is showed next to the mouse position output and add it to the mousePrint function's feed
+// HINT: use pulseUpto
+
+open System
 open Gtk
 open Freckle
 open FSharp.Helpers
@@ -12,9 +16,11 @@ let mousePrint mouseFeed (textView : TextView) =
 let sampler mousePositionSource textView () = 
     sample {
         let! mousePos = Mailbox.readSync mousePositionSource
+
         let! res = mousePrint mousePos textView
                    |> Feed.planSynced_ 
-                
+        
+        
         Application.RunIteration()
         return res
     }
@@ -26,24 +32,24 @@ let setupWindow () =
     window.SetSizeRequest(500,500)
     let textView = new TextView()
     textView.Editable <- false
+    textView.CursorVisible <- false
     window.Add(textView)
     window.ShowAll()
-    textView
+    (window, textView)
 
 [<EntryPoint>]
 let main argv = 
     async {
         Application.Init ()    
-        let textView = setupWindow  ()
-
+        let window, textView = setupWindow  ()
+        let _= GLib.Timeout.Add(200u, new GLib.TimeoutHandler(fun () -> true))
         let clock = Clock.synchronized (Clock.systemUtc)
 
-        let! mousePositionSource = Mailbox.createWithExpiration (Expire.After (Time.ofSeconds 10)) clock
+        let mousePositionSource = Mailbox.createWithTTL (Time.ofSeconds 10) clock
         do! textView.MotionNotifyEvent
             |> Async.AwaitEvent
             |> Async.map (fun evt -> evt.Event.X, evt.Event.Y)  
             |> flip Mailbox.listenTo mousePositionSource
-            
         do! Sample.sampleForever clock (sampler mousePositionSource textView) ()
     
     } |> Async.StartImmediate    

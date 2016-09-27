@@ -1,4 +1,10 @@
-﻿type Position = 
+﻿//Exercise 1:
+// Add laser bullets fired from the fighter when space is pressed
+
+//Exercise 2:
+// Create a meteor at some location with some speed/direction at every second 
+
+type Position = 
     { X : float
       Y : float
     }
@@ -22,6 +28,7 @@ type Object =
       Acceleration : Vector
       Type : ObjectType
     }
+
 type Pilot =
     { Forward : bool
       Backward : bool
@@ -50,6 +57,8 @@ let move (pilot : Pilot) (o : Object) =
              Direction = { Vx = dir.Vx + acc'.Vx; Vy = dir.Vy + acc'.Vy }
              Acceleration = acc'
     }
+
+let getFighter (os : Object list) = List.find (fun o -> o.Type = Fighter) os
 
 let isColliding (o1 : Object) (o2 : Object) =
     let pos1 = o1.Position
@@ -116,6 +125,7 @@ let stateSampler inputMb stateMb gs =
             |> Feed.debouncing
             |> Feed.map (fun _ -> fun () -> Mailbox.postSync gs'' stateMb)
             |> Feed.planSynced_
+
         return gs''
 
     }
@@ -130,7 +140,27 @@ let gameComponent inputMb clock =
             |> Async.Ignore
         return stateMb
     }
-    
+
+
+
+/// There be dragons below this point, enter at your own risk
+
+//             |\___/|
+//            (,\  /,)\
+//            /     /  \
+//           (@_^_@)/   \
+//            W//W_/     \
+//          (//) |        \
+//        (/ /) _|_ /   )  \
+//      (// /) '/,_ _ _/  (~^-.
+//    (( // )) ,-{        _    `.
+//   (( /// ))  '/\      /      |
+//   (( ///))     `.   {       }
+//    ((/ ))    .----~-.\   \-'
+//             ///.----..>   \
+//              ///-._ _  _ _}
+
+
 open OpenTK
 open OpenTK.Graphics
 open OpenTK.Graphics.OpenGL
@@ -193,18 +223,14 @@ let renderState (game : GameWindow) (vs: ViewState) (state : GameState) =
     GL.Clear(ClearBufferMask.ColorBufferBit ||| ClearBufferMask.DepthBufferBit)
     GL.MatrixMode(MatrixMode.Modelview)
     GL.Enable(EnableCap.Texture2D);
+        
     for o in state.Objects do
         let dir = o.Direction
-        let angle = 
-            if dir.Vx = 0.0 && dir.Vy = 0.0 then 0.0f
-            else Vector3.CalculateAngle(Vector3(float32 dir.Vx, float32 dir.Vy, 0.0f), Vector3(1.0f, 0.0f, 0.0f))
-        let angle2 = angle
-        let angle2 = if dir.Vy < 0.0 then angle2 + 3.14f else angle2
+        let angle =  float32 <| atan2 dir.Vy dir.Vx
         
-        printfn "%f,%f = %f -> %f" dir.Vx dir.Vy (angle * (180.0f / 3.14f)) (angle2 * (180.0f / 3.14f))
-        let m = Matrix4.CreateRotationZ(angle2) *
-                Matrix4.CreateTranslation(float32 o.Position.X, float32 o.Position.Y, 0.0f) *
-                Matrix4.CreateScale(0.05f) 
+        let m =   Matrix4.CreateRotationZ(angle) 
+                * Matrix4.CreateTranslation(float32 o.Position.X, float32 o.Position.Y, 0.0f)
+                * Matrix4.CreateScale(0.05f) 
                 * Matrix4.CreateRotationZ(1.5707f)
                 
         GL.LoadMatrix(ref m)

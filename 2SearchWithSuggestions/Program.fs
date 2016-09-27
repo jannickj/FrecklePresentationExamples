@@ -1,5 +1,9 @@
-﻿// Learn more about F# at http://fsharp.org
-// See the 'F# Tutorial' project for more help.
+﻿//Exercise:
+// Add support for immidate trigger 
+// If you don't know what immidiate is goto: https://css-tricks.com/debouncing-throttling-explained-examples/
+// Basically its when an closely tied sequence of events 
+// gets squished into a single event at the beginning
+
 
 open System
 open Gtk
@@ -8,11 +12,13 @@ open Freckle
 
 let sampling keyFeed resultsMb setResults () = 
     sample {
+        let postString s = Mailbox.postPromiseSilent (FakeDB.call s) resultsMb
         do! keyFeed
-            |> Feed.debouncing
+            |> Feed.map (fun s () -> postString s)
             |> Feed.delay (Time.ofMilliseconds 200)
-            |> Feed.actionSynced_ (fun s -> Mailbox.postPromiseSilent (FakeDB.call s) resultsMb)
-        
+            |> Feed.debouncing
+            |> Feed.planSynced_ 
+            
         let! resultsFeed = Mailbox.readSync resultsMb
         
         do! resultsFeed
@@ -56,18 +62,17 @@ let main argv =
 
         let clock = Clock.synchronized (Clock.systemUtc)
         
-        let! mbResults = Mailbox.createWithExpiration (Expire.After (Time.ofSeconds 10)) clock
-        let! mbKeys = Mailbox.createWithExpiration (Expire.After (Time.ofSeconds 10)) clock
+        let mbResults = Mailbox.createWithTTL (Time.ofSeconds 10) clock
+        let mbKeys = Mailbox.createWithTTL (Time.ofSeconds 10) clock
 
-        let evt =
-            bar.Buffer.Changed
+        do! bar.Buffer.Changed
             |> Async.AwaitEvent
             |> FSharp.Helpers.Async.map (fun evt -> bar.Buffer.Text)  
-        do! Mailbox.listenTo evt mbKeys
+            |> Mailbox.listenTo' mbKeys
 
         let sampler s = 
             sample {
-                let! keysFeed = Mailbox.readSync mbKeys                
+                let! keysFeed = Mailbox.readSync mbKeys
                 let! res = sampling keysFeed mbResults setResults s
                 
                 return res
